@@ -1,12 +1,14 @@
 #ifndef __TRAPEZOIDAL_PLANNER__H
 #define __TRAPEZOIDAL_PLANNER__H
 #include <SimpleFOC.h>
+#include "../CircularBuffer/CircularBuffer.h"
 
 class TrapezoidalPlanner
 {
 public:
     TrapezoidalPlanner(int);
     void doTrapezoidalPlannerCommand(char *command);
+    void doGcommandBuffer(char *command);
     void doMCommand(char *command);
     void linkMotor(StepperMotor*);
     void runPlannerOnTick();
@@ -18,6 +20,7 @@ private:
     float Vmax_ = 40.0f;    // # Velocity max (rads/s)
     float Amax_ = 30.0f;    // # Acceleration max (rads/s/s)
     float Dmax_ = 30.0f;    // # Decelerations max (rads/s/s)
+    bool m400_flag = false;
     float Y_;
     float Yd_;
     float Ydd_;
@@ -29,6 +32,7 @@ private:
     bool calculateTrapezoidalPathParameters(float Xf, float Xi, float Vi, float Vmax, float Amax, float Dmax);
     void startExecutionOfPlannerTo(float newPos);
     void computeStepValuesForCurrentTime(float currentTrajectoryTime);
+    CircularBuffer buffer = CircularBuffer(100);
 };
 
 #endif

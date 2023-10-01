@@ -1,9 +1,9 @@
 #include <Arduino.h>
 #include <TrapezoidalPlanner.h>
 
-#define __debug
+//#define __debug
 
-TrapezoidalPlanner::TrapezoidalPlanner(int tickPeriod ){
+TrapezoidalPlanner::TrapezoidalPlanner(int tickPeriod){
     plannerPeriod = tickPeriod;
     isTrajectoryExecuting = false;
     return;
@@ -15,6 +15,10 @@ void TrapezoidalPlanner::linkMotor(StepperMotor *motorReference){
 
 bool TrapezoidalPlanner::isPlannerMoving(){
     return isTrajectoryExecuting;
+}
+
+float mapfloat(float x, float in_min, float in_max, float out_min, float out_max){ 
+     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
 
@@ -63,19 +67,20 @@ void TrapezoidalPlanner::doMCommand(char *MCommand){
 
         //The controller can report axes positions, including extra axes (A, B, C etc.), typically with the M114 command.
 
-          if (commandValue_Int == 114){
-
+        if (commandValue_Int == 114){
+        Serial.println("ok");
         // M114
         // Send current position
-
+        
         //MM per revolution movement 
-        int mm_per_rev = 17;
-        float angle_rapport = motor->shaft_angle;
+        //int mm_per_rev = 17;
+        
         //convert to mm from 2 x radians per revolution using the mm_per_rev variable as the mm per revolution
-        float mm =  map(angle_rapport, 0, 2*PI, 0, mm_per_rev);
+        
+        float mm = mapfloat(motor->shaft_angle, 0, 2*PI, 0, buffer.mm_per_rev);
         Serial.print("X:");
-        Serial.println(mm);
- 
+        Serial.println(mm, 4);
+        
 
        
           } 
@@ -88,8 +93,8 @@ void TrapezoidalPlanner::doMCommand(char *MCommand){
             if (commandValue_Int == 400){
                 // M400
                 // Wait for current move to complete
-
-
+                m400_flag = true;
+               // Serial.println("ok");
 
             }
 
@@ -209,33 +214,45 @@ void TrapezoidalPlanner::doMCommand(char *MCommand){
 
 
         // Place different if statements like "fetch current position".
-
+/*
         #ifdef __debug
             Serial.print("M Command :  ");
             Serial.println(commandValue_Int);
         #endif
      
-
+*/
     
 
 
     
 
 }
+void TrapezoidalPlanner::doGcommandBuffer(char *gCodeCommand){
 
+        buffer.push(gCodeCommand);
+
+}
+
+
+         
 
 void TrapezoidalPlanner::doTrapezoidalPlannerCommand(char *gCodeCommand){
     #ifdef __debug
         Serial.print("GGode command: G");
         Serial.println(gCodeCommand);
+        
     #endif
+    Serial.println("ok");
+
     
     // Parse this string for vals
     String commandSrt = String(gCodeCommand);
+    commandSrt = commandSrt.substring(1);
     float commandValue;
     switch (gCodeCommand[0]){
 
-         
+
+   
 
     case 'V':
         // Remove V so can convert to a float
@@ -270,13 +287,25 @@ void TrapezoidalPlanner::doTrapezoidalPlannerCommand(char *gCodeCommand){
         //  TODO  TODO TODO TODO
         break;
     default:
+        // Remove G so can convert to a float
+
+
+
+        commandSrt = commandSrt.substring(1);
         commandValue = commandSrt.toFloat();
+        //Serial.print("Float: ");
+          //  Serial.println(commandValue, 5);
+
+         //=  map(commandValue, 0, buffer.mm_per_rev, 0, 2*PI);
+
+        float angle_command = mapfloat(commandValue, 0, buffer.mm_per_rev, 0, 2*PI);
         #ifdef __debug
+        
             Serial.print("Move to new position (rads): ");
-            Serial.println(commandValue);
+            Serial.println(angle_command, 5);
         #endif 
         // We start moving to the new position
-        startExecutionOfPlannerTo(commandValue);
+        startExecutionOfPlannerTo(angle_command);
         break;
     }
 }
@@ -299,11 +328,30 @@ void TrapezoidalPlanner::runPlannerOnTick(){
                 #ifdef __debug
                     Serial.println("Done with move");
                 #endif 
+                Serial.println("ok");
+                float map_pos = mapfloat(motor->shaft_angle, 0, 2*PI, 0, buffer.mm_per_rev);
+                Serial.print("X:");
+                Serial.println(map_pos);
+               
                 isTrajectoryExecuting = false;
+                
+                 if (m400_flag){
+                 Serial.println("ok");
+                 m400_flag = false;
+
+                }
+
+             if (!buffer.isEmpty() && !m400_flag){
+                   
+                   char* cmd = buffer.pop();
+                   doTrapezoidalPlannerCommand(cmd);
             }
+            
         }
     }
+    }
 }
+
 
 float TrapezoidalPlanner::sign(float val){
     if (val < 0)
